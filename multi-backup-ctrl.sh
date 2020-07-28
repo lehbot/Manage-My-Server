@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+# OK-API: Manage-My-Server --> multi-backup-ctrl.sh
+# Copyright (c) 2020
+# Author: Nico Schwarz
+# Github Repository: ( https://github.com/OK-API/Manage-My-Server )
+# OK-API : O.K.-Automated Procedures Initiative.
+#
+# Convenient multi source to multi target backup sync control.
+#
+# This file is copyright under the version 1.2 (only) of the EUPL.
+# Please see the LICENSE file for your rights under this license.
+
 #
 # MUST BE EXECUTED WITH SUDO OR ROOT PERMISSION
 #
@@ -98,7 +109,9 @@ startBackup() {
                 echo"$timestamp : Backing up $i to target device ${targetDirectoryArray[$counter]}" | tee -a "$logdir"/backLogOverview.log
                 if [ "$testflag" != "true" ]; then
                         # TODO: Add log entry
+                        # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
                         rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
+                        # Getting the returncode of the first command in the pipe - the rsync.
                         out=${PIPESTATUS[0]}
                 fi
                 # uncomment following line for debugging purpose to test the if clause.
