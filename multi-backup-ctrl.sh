@@ -37,6 +37,9 @@ showHelp() {
         echo "Example: ./doBackup.sh -f /tmp/myInputFile.txt -t"
 }
 
+################################################################################
+# check Regular Execution Tracking File for Execution in last Backup cycle     #
+################################################################################
 checkTrackingFile() {
         logdir=/var/log/doBackupLog/$timestamp
         trackingFile=/var/log/doBackupLog/trackingFile
@@ -46,7 +49,7 @@ checkTrackingFile() {
         # first check the existance of our tracking file
         if [[ -f $trackingFile ]]; then
                 # Comparing modification epoch time with the actual epoch time.
-                # If the difference is bigger than 86400 (24 hrs) then we do a backup.
+                # If the difference is bigger than 86400 (24 hrs) then we can do a backup.
                 # We only want to do a backup once a day.
                 # This could also have been done using the command:  find /var/log/trackingFile -mtime +0
                 #       This checks if there is a file that has a modification date older than 24 hrs.
@@ -67,6 +70,9 @@ checkTrackingFile() {
         fi
 }
 
+################################################################################
+# Main function to actually perform the backup sync jobs                       #
+################################################################################
 startBackup() {
         # Initiating variables first
         timestamp=$(date +%Y%m%d-%H:%M:%S)
@@ -134,7 +140,9 @@ startBackup() {
         echo "FINAL FINISH $(date)" >>"$logdir"/backLogOverview.log
 }
 
-
+################################################################################
+# Function to check and validate input file content                            #
+################################################################################
 getFileContent() {
         # Reading information from file
         ((counter=0))
@@ -174,6 +182,10 @@ getFileContent() {
         done
 }
 
+
+################################################################################
+# Main functionality to parse the command input and call the script functions  #
+################################################################################
 # Reading input parameters one by one, and parsing it.
 # In this while loop we only read the parameters, and validate input.
 # We only start the backup later, if 
@@ -222,6 +234,7 @@ if [ "$fileCheckFlag" = true ]; then
         # Performing check if there has been a backup in the last 24 hrs.
         # The check will exit with rc 0 if there has been a check, so the backup is not started.
         checkTrackingFile
+        # If the last backup is more than 24 hrs ago, we start the backup.
         startBackup
 fi
 
