@@ -92,7 +92,7 @@ startBackup() {
         #       As this script might sync from different filesystems, and the timestamp is being used for checking for changed files, 
         #       it must be able to match properly when using different file systems.
         #
-        #       rsync parameter -z is not being used anymore. -z compresses the date before transferring it, 
+        #       rsync parameter -z is not being used anymore. -z compresses the data before transferring it, 
         #       this is not required if you sync using sata/esata, of if you are having a fast network.
         #       In fact it might even slow things down, as it brings load on the cpu of your server (and only uses one core).
         #       If you need to sync over a small bandwidth WAN connection, you can add the -z paramater again.
@@ -103,7 +103,6 @@ startBackup() {
 
         # In a former version of this script, the rsync output has been piped to console as well as stdout usind tee: > > (tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
         # This is not necessary in this version.
-        # Historical information: The first versionof this script was only using rsync -rtvh
         notification="$timestamp : Local Backup Run started."
         ((counter=0))
         for i in "${!sourceDirectoryArray[@]}"; do
@@ -116,9 +115,10 @@ startBackup() {
                 if [ "$testflag" != "true" ]; then
                         # TODO: Add log entry
                         # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
-                        rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
+                        rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir"/stdout.log) 2> >(tee -a "$logdir"/stderr.log >&2)
                         # Getting the returncode of the first command in the pipe - the rsync.
                         out=${PIPESTATUS[0]}
+                        
                 fi
                 # uncomment following line for debugging purpose to test the if clause.
                 # out=69
@@ -126,6 +126,7 @@ startBackup() {
                 echo "$timestamp : FINISHED $i with code  $out $(date)" | tee -a "$logdir"/backLogOverview.log
                 if [ "$out" != 0 ]; then
                         successVar="false"
+                        # todo: successVar shall be used later to handle failures of just one backup job. If one backup fails it shall continue to do the other backup jobs, but finally fail and send a notification.
                         errmsg="$(cat "$logdir"/stderr.log)"
                         timestamp=$(date +%Y%m%d-%H:%M:%S)
                         notification="$notification \n$timestamp: Backup of  $i  to target device  ${targetDirectoryArray[$i]}  failed with output  $errmsg  and code  $out \n"
@@ -153,7 +154,8 @@ getFileContent() {
                 if [ ${#fieldsArray[@]} -ne 2 ]; then
                         timestamp=$(date +%Y%m%d-%H:%M:%S)
                         notification="$timestamp: ERROR - Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
-                        printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
+                        log "$notification" "ERROR"
+                        #printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
                         exit 1
                 fi
                 # Filling the directory array which will be used to iterate and fill the rsync command later.
@@ -182,6 +184,13 @@ getFileContent() {
         done
 }
 
+log(){
+        message=$1
+        type=$2
+        echo "Doing nothing yet"
+        timestamp=$(date +%H:%M:%S-%d.%m.%Y)
+        printf "%a %b %c"  "$timestamp" "$type" "$message" | tee -a "$logdir"/backLogOverview.log
+}
 
 ################################################################################
 # Main functionality to parse the command input and call the script functions  #
