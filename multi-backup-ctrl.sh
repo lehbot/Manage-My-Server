@@ -6,13 +6,13 @@
 # Github Repository: ( https://github.com/OK-API/Manage-My-Server )
 # OK-API : O.K.-Automated Procedures Initiative.
 #
-# Convenient multi source to multi target backup sync control.
+# Convenient multi-source to multi-target backup sync control.
 #
 # This file is copyright under the version 1.2 (only) of the EUPL.
 # Please see the LICENSE file for your rights under this license.
 
 #
-# MUST BE EXECUTED WITH SUDO OR ROOT PERMISSION
+# RECOMMENDED TO BE EXECUTED WITH SUDO OR ROOT PERMISSION
 #
 
 ################################################################################
@@ -27,14 +27,14 @@ showHelp() {
         echo "The configuration which source directory shall be backed up to which target directory is being read from a separate config file."
         echo "The script is built to be either executed with sudo or root permissions."
         echo
-        echo "Syntax: doBackup.sh -f|--file file_path [-t|--test] [-h|--help]"
+        echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-h|--help]"
         echo "options:"
-        echo "-f|--file     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup. "
+        echo "-p|--path     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup. "
         echo "-t|--test     Sets the test flag, which makes the script run without really performing the rsync backup."
         echo "-h|--help     Print this Help."
         echo
-        echo "Example: ./doBackup.sh -f /tmp/myInputFile.txt"
-        echo "Example: ./doBackup.sh -f /tmp/myInputFile.txt -t"
+        echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
+        echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t"
 }
 
 ################################################################################
@@ -152,9 +152,9 @@ getFileContent() {
                 # First checking if we have read a valid number of fields.
                 # As there are only pairs allowed in the input file, we should have an even number of fields now.
                 if [ ${#fieldsArray[@]} -ne 2 ]; then
-                        timestamp=$(date +%Y%m%d-%H:%M:%S)
-                        notification="$timestamp: ERROR - Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
-                        log "$notification" "ERROR"
+                        #timestamp=$(date +%Y%m%d-%H:%M:%S)
+                        #notification="Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
+                        log "ERROR" "Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
                         #printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
                         exit 1
                 fi
@@ -177,19 +177,23 @@ getFileContent() {
                 if [ -d "$i" ]; then
                         echo "$timestamp : Successfully checked existence of input folder: $i."
                 else
-                        notification="$timestamp: ERROR - Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory. \n" >&2
-                        printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
+                        #notification="$timestamp: ERROR - Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory. \n" >&2
+                        log "ERROR" "Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory. \n"
+                        #printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
                         exit 1
                 fi
         done
 }
 
 log(){
-        message=$1
-        type=$2
-        echo "Doing nothing yet"
+        type=$1
+        message=$2
         timestamp=$(date +%H:%M:%S-%d.%m.%Y)
-        printf "%a %b %c"  "$timestamp" "$type" "$message" | tee -a "$logdir"/backLogOverview.log
+        if [ $message == "ERROR" ]; then
+                printf "%a %b %c"  "$timestamp" "$type" "$message" >&2 | tee -a "$logdir"/backLogOverview.log
+        else
+                printf "%a %b %c"  "$timestamp" "$type" "$message" | tee -a "$logdir"/backLogOverview.log
+        fi
 }
 
 ################################################################################
@@ -209,7 +213,7 @@ while [[ $# -gt 0 ]]; do
                 showHelp
                 exit 0
                 ;;
-        -f | --file) # specifies input file path
+        -p | --path) # specifies input file path
                 filepath="$2"
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
@@ -217,7 +221,7 @@ while [[ $# -gt 0 ]]; do
                         # Then we get the content and validate the content if it is properly formatted
                         getFileContent
                 else
-                        printf "The filepath '%s' specified with the -f|--file parameter does not exist.\n" "$filepath" >&2
+                        printf "The filepath '%s' specified with the -p|--path parameter does not exist.\n" "$filepath" >&2
                         exit 1
                 fi
                 fileCheckFlag=true
