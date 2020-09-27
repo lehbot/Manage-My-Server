@@ -75,15 +75,15 @@ checkTrackingFile() {
 ################################################################################
 startBackup() {
         # Initiating variables first
-        timestamp=$(date +%Y%m%d-%H:%M:%S)
-        mkdir -p /var/log/doBackupLog
-        logdir=/var/log/doBackupLog/$timestamp
+        #timestamp=$(date +%Y%m%d-%H:%M:%S)
+        #mkdir -p /var/log/doBackupLog
+        #logdir=/var/log/doBackupLog/$timestamp
         trackingFile=/var/log/doBackupLog/trackingFile
   
         successVar="true"
 
         # The -p parameter creates all parent directories and does not throw an error if the folder already exists
-        mkdir -p "$logdir"
+        #mkdir -p "$logdir"
         timestamp=$(date +%Y%m%d-%H:%M:%S)
         echo "$timestamp : Starting Backup." | tee -a "$logdir"/backLogOverview.log
         # Some thoughts about the following rsync command:
@@ -187,9 +187,10 @@ getFileContent() {
 
 log(){
         type=$1
-        message=$2
+        message=$
+        # Check for existance of log directory and log file.
         timestamp=$(date +%H:%M:%S-%d.%m.%Y)
-        if [ $message == "ERROR" ]; then
+        if [ "$message" = "ERROR" ]; then
                 printf "%a %b %c"  "$timestamp" "$type" "$message" >&2 | tee -a "$logdir"/backLogOverview.log
         else
                 printf "%a %b %c"  "$timestamp" "$type" "$message" | tee -a "$logdir"/backLogOverview.log
@@ -205,6 +206,24 @@ log(){
 fileCheckFlag=false
 declare -a sourceDirectoryArray
 declare -a targetDirectoryArray
+# Preparing logging and log directories
+startTimestamp=$(date +%Y%m%d-%H-%M-%S)
+logdir="/var/log/doBackupLog/$startTimestamp"
+logFileName="backLogOverview.log"
+# The -p parameter creates all parent directories and does not throw an error if the folder already exists
+mkdir -p "$logdir"
+rc=$?
+if [ "$rc" != "0" ]; then
+        log "ERROR" "Could not check or create $logdir. Command 'mkdir -p $logdir' failed with returncode $rc."
+        exit 2
+fi
+touch "$logdir/$logFileName"
+rc=$?
+if [ "$rc" != "0" ]; then
+        log "ERROR" "Could not check or create $logdir. Command 'touch $logdir/$logFileName' failed with returncode $rc."
+        exit 2
+fi
+
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -217,7 +236,7 @@ while [[ $# -gt 0 ]]; do
                 filepath="$2"
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
-                        echo "Filepath validated."
+                        echo "Input filepath validated."
                         # Then we get the content and validate the content if it is properly formatted
                         getFileContent
                 else
