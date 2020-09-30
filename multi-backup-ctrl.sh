@@ -41,12 +41,11 @@ showHelp() {
 # check Regular Execution Tracking File for Execution in last Backup cycle     #
 ################################################################################
 checkTrackingFile() {
-        logdir=/var/log/doBackupLog/$timestamp
-        trackingFile=/var/log/doBackupLog/trackingFile
+        trackingFile="/var/log/doBackupLog/trackingFile"
        ##################
         # Checking if this script already ran in the past 24 hrs
         ##################
-        # first check the existance of our tracking file
+        # first check the existence of our tracking file
         if [[ -f $trackingFile ]]; then
                 # Comparing modification epoch time with the actual epoch time.
                 # If the difference is bigger than 86400 (24 hrs) then we can do a backup.
@@ -59,14 +58,15 @@ checkTrackingFile() {
                 currentTime=$(date +%s)
                 timeDiff=$((currentTime - trackingFileDate))
                 if ((timeDiff < 86400)); then
-                        echo "trackingFile Date is smaller than 86400 seconds (24hrs). Nothing to do here. Age is " $timeDiff
+                        # This information is being logged to syslog, using logger, as we do not want it to clutter the dedicated logfile of this script.
+                        # As this script can be executed multiple times a day (e.g. hourly), there can be a large number of these entries.
+                        # We want this information in the syslog, but as there is no 'real' action being performed we just need the info that the script ran, but did not perform anything.
+                        log "$logRegularExecFileName" "INFO" "trackingFile Date is smaller than 86400 seconds (24hrs). Nothing to do here. Age is $timeDiff."
                         # We consider this a successful execution of the script, assuming that it is being called regulary using e.g. a cronjob.
                         exit 0
                 fi
         else
-                # TODO: This should be part of an extra logging function
-                mkdir -p "$logdir"
-                echo "$timestamp" ": Tracking file " "$trackingFile" " not found. Assuming first or force run and starting backup." | tee -a "$logdir"/backLogOverview.log
+                log "$logRegularExecFileName" "INFO" "Tracking file $trackingFile not found. Assuming first or force run. Starting backup."
         fi
 }
 
@@ -74,18 +74,12 @@ checkTrackingFile() {
 # Main function to actually perform the backup sync jobs                       #
 ################################################################################
 startBackup() {
-        # Initiating variables first
-        #timestamp=$(date +%Y%m%d-%H:%M:%S)
-        #mkdir -p /var/log/doBackupLog
-        #logdir=/var/log/doBackupLog/$timestamp
-        trackingFile=/var/log/doBackupLog/trackingFile
-  
-        successVar="true"
 
+        successVar="true"
         # The -p parameter creates all parent directories and does not throw an error if the folder already exists
         #mkdir -p "$logdir"
         timestamp=$(date +%Y%m%d-%H:%M:%S)
-        echo "$timestamp : Starting Backup." | tee -a "$logdir"/backLogOverview.log
+        log "$logFileName" "INFO" "All checks passed. Starting Backup."
         # Some thoughts about the following rsync command:
         #       --modify-window=1 rounds the timestamp to full seconds. NTFS timestamps have a resolution of 2 seconds, FAT/EXT filesystems use seconds.
         #       modify-window allows us to have a timestamp that differs by 1 second.
@@ -102,43 +96,43 @@ startBackup() {
         #       -h      Flag for human readable output
 
         # In a former version of this script, the rsync output has been piped to console as well as stdout usind tee: > > (tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
-        # This is not necessary in this version.
-        notification="$timestamp : Local Backup Run started."
+        # This is not necessary in this version, as a dedicated logging function has been introduced.
         ((counter=0))
         for i in "${!sourceDirectoryArray[@]}"; do
                 # Adding a blank line in notification to have it better formatted in output
                 notification="$notification \n"
-                timestamp=$(date +%Y%m%d-%H:%M:%S)
                 # Following line is for debug purpose only
                 #echo $timestamp ": Looping through index " $i | tee -a $logdir/backLogOverview.log
-                echo"$timestamp : Backing up $i to target device ${targetDirectoryArray[$counter]}" | tee -a "$logdir"/backLogOverview.log
+                timestamp=$(date +%Y%m%d-%H:%M:%S)
+                notification="$notification $timestamp Backing up $i to target device ${targetDirectoryArray[$counter]}.\n"
+                log "$logFileName" "INFO" "Backing up $i to target device ${targetDirectoryArray[$counter]}."
                 if [ "$testflag" != "true" ]; then
                         # TODO: Add log entry
+                        timestamp=$(date +%Y%m%d-%H:%M:%S)
+                        logStdErrorFile="$timestamp-stderr.log"
                         # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
-                        rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir"/stdout.log) 2> >(tee -a "$logdir"/stderr.log >&2)
+                        rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir/$logFileName") 2> >(tee -a "$logdir/$logStdErrorFile" >&2)
                         # Getting the returncode of the first command in the pipe - the rsync.
                         out=${PIPESTATUS[0]}
-                        
                 fi
                 # uncomment following line for debugging purpose to test the if clause.
-                # out=69
+                # out=42
                 timestamp=$(date +%Y%m%d-%H:%M:%S)
-                echo "$timestamp : FINISHED $i with code  $out $(date)" | tee -a "$logdir"/backLogOverview.log
+                log "$logFileName" "INFO" "FINISHED $i with code  $out at $(date)."
+                notification="$notification $timestamp FINISHED backup of $i to ${targetDirectoryArray[$counter]} with code $out at $(date)."
                 if [ "$out" != 0 ]; then
                         successVar="false"
                         # todo: successVar shall be used later to handle failures of just one backup job. If one backup fails it shall continue to do the other backup jobs, but finally fail and send a notification.
-                        errmsg="$(cat "$logdir"/stderr.log)"
+                        errmsg="$(cat "$logdir/$logStdErrorFile")"
                         timestamp=$(date +%Y%m%d-%H:%M:%S)
                         notification="$notification \n$timestamp: Backup of  $i  to target device  ${targetDirectoryArray[$i]}  failed with output  $errmsg  and code  $out \n"
-                        notification="$notification Repeating backLogOverview content: \n"
-                        notification="${notification}$(cat "$logdir"/backLogOverview.log)  \n"
-                        printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
+                        log "$logFileName" "ERROR" "$notification"
                         break
                 fi
         done
         # Setting the new modification date on trackingFile
         touch $trackingFile
-        echo "FINAL FINISH $(date)" >>"$logdir"/backLogOverview.log
+        log "$logFileName" "INFO" "FINAL FINISH $(date)" >>"$logdir"/backLogOverview.log
 }
 
 ################################################################################
@@ -148,17 +142,17 @@ getFileContent() {
         # Reading information from file
         ((counter=0))
         while IFS= read -r line; do
+                # Cutting input to fill array with source and target folder information
                 fieldsArray=($(echo "$line" | cut -d' ' -f1-))
                 # First checking if we have read a valid number of fields.
                 # As there are only pairs allowed in the input file, we should have an even number of fields now.
                 if [ ${#fieldsArray[@]} -ne 2 ]; then
-                        #timestamp=$(date +%Y%m%d-%H:%M:%S)
-                        #notification="Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
-                        log "ERROR" "Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
-                        #printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
+                        # If it is an uneven number of fields, we have for sure a malformed input file
+                        log "$logRegularExecFileName" "ERROR" "Invalid format of input file content. Every line needs to contain a pair of folders, separated by one blank. Example: /home/myUser/myFolder /mnt/myTargetMount/targetFolder"
                         exit 1
                 fi
                 # Filling the directory array which will be used to iterate and fill the rsync command later.
+                # TODO: Delete this for loop
                 # for i in "${!fieldsArray[@]}"; do
                         sourceDirectoryArray[$counter]="${fieldsArray[0]}"
                         targetDirectoryArray[$counter]="${fieldsArray[1]}"
@@ -172,29 +166,27 @@ getFileContent() {
         for i in "${sourceDirectoryArray[@]}"; do
                 timestamp=$(date +%Y%m%d-%H:%M:%S)
                 echo "i is $i"
-                # TODO: Delete following line
-                #directory=${directoryArray[$i]}
                 if [ -d "$i" ]; then
-                        echo "$timestamp : Successfully checked existence of input folder: $i."
+                        log "$logRegularExecFileName" "INFO" "Successfully checked existence of input folder: $i."
                 else
-                        #notification="$timestamp: ERROR - Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory. \n" >&2
-                        log "ERROR" "Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory. \n"
-                        #printf "%s" "$notification" | tee -a "$logdir"/backLogOverview.log
+                        log "$logRegularExecFileName" "ERROR" "Directory $i does not exist. Please check your input file. Specifying an input file with correct source and target folders is mandatory."
                         exit 1
                 fi
         done
 }
-
+#> > (tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
 log(){
-        type=$1
-        message=$
-        # Check for existance of log directory and log file.
-        timestamp=$(date +%H:%M:%S-%d.%m.%Y)
-        if [ "$message" = "ERROR" ]; then
-                printf "%a %b %c"  "$timestamp" "$type" "$message" >&2 | tee -a "$logdir"/backLogOverview.log
+        targetFile=$1
+        type=$2
+        message=$3
+        # TODO: Check for existence of log directory and log file.
+        timestamp=$(date +%d.%m.%Y-%H:%M:%S)
+        if [ "$type" = "ERROR" ]; then
+                printf "%s"  "$timestamp $type $message" 1>&2 > >(tee -a "$logdir/$targetFile" >&2)       
         else
-                printf "%a %b %c"  "$timestamp" "$type" "$message" | tee -a "$logdir"/backLogOverview.log
+                printf "%s"  "$timestamp $type $message" | tee -a "$logdir/$targetFile"
         fi
+
 }
 
 ################################################################################
@@ -207,27 +199,28 @@ fileCheckFlag=false
 declare -a sourceDirectoryArray
 declare -a targetDirectoryArray
 # Preparing logging and log directories
-startTimestamp=$(date +%Y%m%d-%H-%M-%S)
-logdir="/var/log/doBackupLog/$startTimestamp"
-logFileName="backLogOverview.log"
+logdir="/var/log/multiBackupLog"
+logFileName="backupLog.log"
+logRegularExecFileName="ExecutionLog.log"
+
 # The -p parameter creates all parent directories and does not throw an error if the folder already exists
 mkdir -p "$logdir"
 rc=$?
 if [ "$rc" != "0" ]; then
-        log "ERROR" "Could not check or create $logdir. Command 'mkdir -p $logdir' failed with returncode $rc."
+        log "$logRegularExecFileName" "ERROR" "Could not check or create $logdir. Command 'mkdir -p $logdir' failed with returncode $rc."
         exit 2
 fi
 touch "$logdir/$logFileName"
 rc=$?
 if [ "$rc" != "0" ]; then
-        log "ERROR" "Could not check or create $logdir. Command 'touch $logdir/$logFileName' failed with returncode $rc."
+        log "$logRegularExecFileName" "ERROR" "Could not check or create $logdir. Command 'touch $logdir/$logFileName' failed with returncode $rc."
         exit 2
 fi
 
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-        # todo: Maybe add a force parameter, which forces the script to continue even if a single backup job failed.
+        # TODO: Maybe add a force parameter, which forces the script to continue even if a single backup job failed.
         -h | --help)
                 showHelp
                 exit 0
@@ -236,11 +229,11 @@ while [[ $# -gt 0 ]]; do
                 filepath="$2"
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
-                        echo "Input filepath validated."
+                        log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath "
                         # Then we get the content and validate the content if it is properly formatted
                         getFileContent
                 else
-                        printf "The filepath '%s' specified with the -p|--path parameter does not exist.\n" "$filepath" >&2
+                        log "$logRegularExecFileName" "ERROR" "The filepath '$filepath' specified with the -p|--path parameter does not exist."
                         exit 1
                 fi
                 fileCheckFlag=true
