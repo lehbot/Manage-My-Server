@@ -21,11 +21,12 @@
 
 showHelp() {
         # Display Help
+        echo
         echo "Usage: multi-backup-ctrl.sh [OPTIONS]"
         echo
         echo "This script is built to perform a backup of one or more source directories to one or more target directories."
-        echo "It is designed to be run in a NAS System which has multiple backup disks which can be mounted in different paths."
-        echo "Even though it might run on a large variety of NAS systems, it was made for being used with 'openmediavault'."
+        echo "It is designed to be run in a System which has multiple backup disks which can be mounted in different paths."
+        echo "Even though it might run on a large variety of systems, it was made for being used with 'openmediavault'."
         echo "The configuration which source directory shall be backed up to which target directory is being read from a separate config file."
         echo "The script is built to be either executed with sudo or root permissions."
         echo
@@ -36,9 +37,16 @@ showHelp() {
         echo "-t|--test     Sets the test flag, which makes the script run without really performing the rsync backup."
         echo "-h|--help     Print this Help."
         echo
-        echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
-        echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t"
+        echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
+        echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t"
         echo 
+        echo "The input file must contain a pair of source directory and target directory in each line, separated by a blank."
+        echo "The required format is '<sourceDir> <targetDir>'"
+        echo
+        echo "Example input file:"
+        echo "/mnt/d/doBackupSource/subdir1/ /mnt/f/doBackupTarget/"
+        echo "/mnt/d/doBackupSource/subdir2/ /mnt/f/doBackupTarget/foodir/"
+        echo
         echo "Exit codes:"
         echo "0         if execution successful."
         echo "1         if preparation fails, which can be malformed input or problems with logging environment."
@@ -49,7 +57,6 @@ showHelp() {
 # check Regular Execution Tracking File for Execution in last Backup cycle     #
 ################################################################################
 checkTrackingFile() {
-        trackingFile="/var/log/doBackupLog/trackingFile"
        ##################
         # Checking if this script already ran in the past 24 hrs
         ##################
@@ -216,6 +223,7 @@ declare -a targetDirectoryArray
 logdir="/var/log/multiBackupLog"
 logFileName="backupLog.log"
 logRegularExecFileName="executionLog.log"
+trackingFile="$logdir/trackingFile"
 
 # First we check if we get any input parameter at all, as there are some mandatory params.
 if [[ $# -eq 0 ]]; then
