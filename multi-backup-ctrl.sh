@@ -21,6 +21,8 @@
 
 showHelp() {
         # Display Help
+        echo "Usage: multi-backup-ctrl.sh [OPTIONS]"
+        echo
         echo "This script is built to perform a backup of one or more source directories to one or more target directories."
         echo "It is designed to be run in a NAS System which has multiple backup disks which can be mounted in different paths."
         echo "Even though it might run on a large variety of NAS systems, it was made for being used with 'openmediavault'."
@@ -28,13 +30,19 @@ showHelp() {
         echo "The script is built to be either executed with sudo or root permissions."
         echo
         echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-h|--help]"
-        echo "options:"
+        echo 
+        echo "Options:"
         echo "-p|--path     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup. "
         echo "-t|--test     Sets the test flag, which makes the script run without really performing the rsync backup."
         echo "-h|--help     Print this Help."
         echo
         echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
         echo "Example: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t"
+        echo 
+        echo "Exit codes:"
+        echo "0         if execution successful."
+        echo "1         if preparation fails, which can be malformed input or problems with logging environment."
+        echo "2         if the rsync based backup itself failed for some reason."
 }
 
 ################################################################################
@@ -209,26 +217,31 @@ logdir="/var/log/multiBackupLog"
 logFileName="backupLog.log"
 logRegularExecFileName="executionLog.log"
 
-# For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
-log "$logRegularExecFileName" "DEBUG" "#####################################################################"
-log "$logFileName" "DEBUG" "#####################################################################"
+# First we check if we get any input parameter at all, as there are some mandatory params.
+if [[ $# -eq 0 ]]; then
+        # we just show the usage information if there are no params present
+        showHelp
+        exit 0
+fi
 
-
+# Setting up everything for logging. 
+# Ironically enough we use the log function to log errors about log files not being present. In some cases this might lead to additional errors,
+# as the tee call might not be able to write to the file, but the printf part of the log function will bring this message to the stderr output.
 # The -p parameter creates all parent directories and does not throw an error if the folder already exists
 mkdir -p "$logdir"
 rc=$?
 if [ "$rc" != "0" ]; then
         log "$logRegularExecFileName" "ERROR" "Could not check or create $logdir. Command 'mkdir -p $logdir' failed with returncode $rc."
-        exit 2
+        exit 1
 fi
 touch "$logdir/$logFileName"
 rc=$?
 if [ "$rc" != "0" ]; then
         log "$logRegularExecFileName" "ERROR" "Could not check or create $logdir. Command 'touch $logdir/$logFileName' failed with returncode $rc."
-        exit 2
+        exit 1
 fi
 
-
+# Starting to parse input parameters and performing input validation
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -239,6 +252,10 @@ while [[ $# -gt 0 ]]; do
                 ;;
         -p | --path) # specifies input file path
                 filepath="$2"
+                # For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
+                # This is being done here, to have the entry in the log file before the first real log entry, and we do not want it to show up when we just need to pass the -h/help usage information.
+                log "$logRegularExecFileName" "DEBUG" "#####################################################################"
+                log "$logFileName" "DEBUG" "#####################################################################"
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
                         log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath "
