@@ -309,4 +309,3 @@ if [ "$fileCheckFlag" = true ]; then
         # If the last backup is more than 24 hrs ago, we start the backup.
         startBackup
 fi
-
