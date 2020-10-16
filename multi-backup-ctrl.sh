@@ -257,6 +257,18 @@ if [ "$rc" != "0" ]; then
 fi
 
 # Starting to parse input parameters and performing input validation
+# In the first loop we are settings global parameters which will have a global effect, including the second loop for parameter parsing
+while [[ $# -gt 0 ]]; do
+        key="$1"
+        case $key in
+        -s | --silent) # supresses all log level messages below ERROR level.
+                silentFlag=true
+                shift # past argument
+                ;;
+        esac
+done
+
+# In the second loop the parameters are set that have a functional impact on the script behaviour
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -285,10 +297,6 @@ while [[ $# -gt 0 ]]; do
                 ;;
         -t | --test) # specifies the testflag
                 testflag=true
-                shift # past argument
-                ;;
-        -s | --silent) # supresses all log level messages below ERROR level.
-                silentFlag=true
                 shift # past argument
                 ;;
         *) # unknown option
