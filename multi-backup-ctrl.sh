@@ -69,7 +69,7 @@ checkTrackingFile() {
                 #       This checks if there is a file that has a modification date older than 24 hrs.
                 #       But I wanted to make the logic more obvious by using this if clause, for others to read.
                 #       In addition I wanted to react differently on a non existing file and on an existing file with a mtime diff of less than 24 hrs.
-                trackingFileDate=$(stat -c %Y $trackingFile)
+                trackingFileDate=$(stat -c %Y "$trackingFile")
                 currentTime=$(date +%s)
                 timeDiff=$((currentTime - trackingFileDate))
                 if ((timeDiff < 86400)); then
@@ -153,7 +153,7 @@ startBackup() {
                 fi
         done
         # Setting the new modification date on trackingFile
-        touch $trackingFile
+        touch "$trackingFile"
         log "$logFileName" "INFO" "FINAL FINISH $(date)"
         exit 0
 }
@@ -204,7 +204,13 @@ log(){
         if [ "$type" = "ERROR" ]; then
                 printf "%s\n"  "$timestamp $type $message" 1>&2 > >(tee -a "$logdir/$targetFile" >&2)       
         else
-                printf "%s\n"  "$timestamp $type $message" | tee -a "$logdir/$targetFile"
+                if [ "$silentFlag" = true ]; then
+                        # If the -s silent parameter has been set, we only append the log to the log file.
+                        printf "%s\n"  "$timestamp $type $message" >> "$logdir/$targetFile"
+                else
+                        # If the -s silent paramater has not been set, the message gets added to the log file and appears as output in the shell
+                        printf "%s\n"  "$timestamp $type $message" | tee -a "$logdir/$targetFile"
+                fi
         fi
 
 }
@@ -217,6 +223,7 @@ log(){
 # We only start the backup later, if 
 fileCheckFlag=false
 testflag=false
+silentFlag=false
 declare -a sourceDirectoryArray
 declare -a targetDirectoryArray
 # Preparing logging and log directories
@@ -253,7 +260,6 @@ fi
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-        # TODO: Maybe add a force parameter, which forces the script to continue even if a single backup job failed.
         -h | --help)
                 showHelp
                 exit 0
@@ -281,6 +287,10 @@ while [[ $# -gt 0 ]]; do
                 testflag=true
                 shift # past argument
                 ;;
+        -s | --silent) # supresses all log level messages below ERROR level.
+                silentFlag=true
+                shift # past argument
+                ;;
         *) # unknown option
                 printf "Unknown input parameter %s. \nUsage: \n" "$1" >&2
                 showHelp
@@ -299,3 +309,4 @@ if [ "$fileCheckFlag" = true ]; then
         # If the last backup is more than 24 hrs ago, we start the backup.
         startBackup
 fi
+
