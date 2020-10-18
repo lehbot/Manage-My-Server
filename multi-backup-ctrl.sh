@@ -127,7 +127,7 @@ startBackup() {
                 timestamp=$(date +%Y%m%d-%H%M%S)
                 logStdErrorFile="$timestamp-stderr.log"
                 touch "$logdir/$logStdErrorFile"
-                if [ "$testflag" != "true" ]; then
+                if [ "$testFlag" != "true" ]; then
                         # TODO: Add log entry
                         # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
                         rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir/$logFileName") 2> >(tee -a "$logdir/$logStdErrorFile" >&2)
@@ -159,7 +159,7 @@ startBackup() {
 }
 
 ################################################################################
-# Function to check and validate input file content                            #
+# Function to get and validate input file content                              #
 ################################################################################
 getFileContent() {
         # Reading information from file
@@ -179,7 +179,12 @@ getFileContent() {
                         targetDirectoryArray[$counter]="${fieldsArray[1]}"
                         ((++counter))
         done <"$filepath"
+}
 
+################################################################################
+# Function to validate input file content                                      #
+################################################################################
+checkFileContent() {
         # Checking and validating input
         # Now checking if the source paths exist
         # We only check the source paths. Non existant target paths will be created later anyway.
@@ -221,8 +226,7 @@ log(){
 # Reading input parameters one by one, and parsing it.
 # In this while loop we only read the parameters, and validate input.
 # We only start the backup later, if 
-fileCheckFlag=false
-testflag=false
+testFlag=false
 silentFlag=false
 declare -a sourceDirectoryArray
 declare -a targetDirectoryArray
@@ -257,18 +261,7 @@ if [ "$rc" != "0" ]; then
 fi
 
 # Starting to parse input parameters and performing input validation
-# In the first loop we are settings global parameters which will have a global effect, including the second loop for parameter parsing
-while [[ $# -gt 0 ]]; do
-        key="$1"
-        case $key in
-        -s | --silent) # supresses all log level messages below ERROR level.
-                silentFlag=true
-                shift # past argument
-                ;;
-        esac
-done
-
-# In the second loop the parameters are set that have a functional impact on the script behaviour
+# Reading and parsing the arguments and setting flags to influence the script behaviour later.
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -278,25 +271,24 @@ while [[ $# -gt 0 ]]; do
                 ;;
         -p | --path) # specifies input file path
                 filepath="$2"
-                # For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
-                # This is being done here, to have the entry in the log file before the first real log entry, and we do not want it to show up when we just need to pass the -h/help usage information.
-                log "$logRegularExecFileName" "DEBUG" "#####################################################################"
-                log "$logFileName" "DEBUG" "#####################################################################"
+
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
-                        log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath "
-                        # Then we get the content and validate the content if it is properly formatted
+                        # If the file exists, we read its contents.
                         getFileContent
                 else
                         log "$logRegularExecFileName" "ERROR" "The filepath '$filepath' specified with the -p|--path parameter does not exist."
                         exit 1
                 fi
-                fileCheckFlag=true
                 shift # past argument
                 shift # past value
                 ;;
-        -t | --test) # specifies the testflag
-                testflag=true
+        -t | --test) # specifies the testFlag
+                testFlag=true
+                shift # past argument
+                ;;
+        -s | --silent) # We handled this before. 
+                silentFlag=true
                 shift # past argument
                 ;;
         *) # unknown option
@@ -307,13 +299,18 @@ while [[ $# -gt 0 ]]; do
         esac
 done
 
-# Of course we only start the backup if the proper flag is present,
-# proving that the proper parameter has been set, and the input has been validated.
-# In addition this allows the while loop to finish and properly parse all input parameters, before we take action.
-if [ "$fileCheckFlag" = true ]; then
-        # Performing check if there has been a backup in the last 24 hrs.
-        # The check will exit with rc 0 if there has been a check, so the backup is not started.
-        checkTrackingFile
-        # If the last backup is more than 24 hrs ago, we start the backup.
-        startBackup
-fi
+# For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
+# This is being done here, to have the entry in the log file before the first real log entry, and we do not want it to show up when we just need to pass the -h/help usage information.
+log "$logRegularExecFileName" "DEBUG" "#####################################################################"
+log "$logFileName" "DEBUG" "#####################################################################"
+# We validated the filepath before in the argument parsing. For the -s parameter to have effect, we write this log outside of the argument parsing function.
+log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath and successfully extracted data."
+# Now we validate the content and checking for the existance of the source folders
+checkFileContent
+# All checks and validations are done now, proving that the proper parameters have been set, and the input has been validated.
+# Performing check if there has been a backup in the last 24 hrs.
+# The check will exit with rc 0 if there has been a check, so the backup is not started.
+checkTrackingFile
+# If the last backup is more than 24 hrs ago, we start the backup.
+startBackup
+
