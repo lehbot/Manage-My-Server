@@ -30,11 +30,12 @@ showHelp() {
         echo "The configuration which source directory shall be backed up to which target directory is being read from a separate config file."
         echo "The script is built to be either executed with sudo or root permissions."
         echo
-        echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-h|--help]"
+        echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-s|--silent] [-h|--help]"
         echo 
         echo "Options:"
         echo "-p|--path     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup. "
         echo "-t|--test     Sets the test flag, which makes the script run without really performing the rsync backup."
+        echo "-s|--silent   Sets the 'silent' flag, which prevents the output of DEBUG and INFO level logs to stdout. It will only be logged to the log file. ERROR level will still be logged to stdout and file."
         echo "-h|--help     Print this Help."
         echo
         echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
@@ -80,10 +81,10 @@ checkTrackingFile() {
                         # We consider this a successful execution of the script, assuming that it is being called regulary using e.g. a cronjob.
                         exit 0
                 else
-                        log "$logRegularExecFileName" "INFO" "trackingFile Date is bigger or equal than 86400 seconds (24hrs). Age is $timeDiff. Backup will be started now."
+                        log "$logRegularExecFileName" "INFO" "trackingFile Date is bigger or equal than 86400 seconds (24hrs). Age is $timeDiff. Backup will be started now. For a detailed backup log see: $logdir$logFileName"
                 fi
         else
-                log "$logRegularExecFileName" "INFO" "Tracking file $trackingFile not found. Assuming first or force run. Starting backup."
+                log "$logRegularExecFileName" "INFO" "Tracking file $trackingFile not found. Assuming first or force run. Starting backup. For a detailed backup log see: $logdir$logFileName"
         fi
 }
 
@@ -135,6 +136,7 @@ startBackup() {
                         out=${PIPESTATUS[0]}
                 else
                         # we assume a successful rsync command when using the -t testparam.
+                        log  "$logFileName" "INFO" "Testflag recognized. Skipped rsync execution."
                         out=0
                 fi
                 # uncomment following line for debugging purpose to test the if clause while using the -t param. change the value to 0 for testing the script success.
@@ -289,6 +291,7 @@ while [[ $# -gt 0 ]]; do
                 ;;
         -s | --silent) # We handled this before. 
                 silentFlag=true
+                log "$logRegularExecFileName" "INFO" "Silent flag has been set. INFO and DEBUG Level output will not go to stdout but logfile only."
                 shift # past argument
                 ;;
         *) # unknown option
