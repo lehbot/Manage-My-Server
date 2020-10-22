@@ -112,9 +112,6 @@ startBackup() {
         #       --stats  Shows a comprehensive report at the end of transferring the data.
         #       -v      Flag for verbose output
         #       -h      Flag for human readable output
-
-        # In a former version of this script, the rsync output has been piped to console as well as stdout usind tee: > > (tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
-        # This is not necessary in this version, as a dedicated logging function has been introduced.
         ((counter=0))
         for i in "${sourceDirectoryArray[@]}"; do
                 # Adding a blank line in notification to have it better formatted in output
@@ -129,7 +126,9 @@ startBackup() {
                 logStdErrorFile="$timestamp-stderr.log"
                 touch "$logdir/$logStdErrorFile"
                 if [ "$testFlag" != "true" ]; then
-                        # TODO: Add log entry
+                        # logging to execution to make an entry that can be picked up by a monitoring sytem.
+                        # In addition this creates a more readable entry, as the backup log contains loads of details from the rsync.
+                        log "$logRegularExecFileName" "INFO" "Backing up $i to target device ${targetDirectoryArray[$counter]}."
                         # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
                         rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir/$logFileName") 2> >(tee -a "$logdir/$logStdErrorFile" >&2)
                         # Getting the returncode of the first command in the pipe - the rsync.
@@ -153,6 +152,7 @@ startBackup() {
                         log "$logFileName" "ERROR" "$notification"
                         exit 2
                 fi
+                ((++counter))
         done
         # Setting the new modification date on trackingFile
         touch "$trackingFile"
