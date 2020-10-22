@@ -30,11 +30,12 @@ showHelp() {
         echo "The configuration which source directory shall be backed up to which target directory is being read from a separate config file."
         echo "The script is built to be either executed with sudo or root permissions."
         echo
-        echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-h|--help]"
+        echo "Syntax: multi-backup-ctrl.sh -p|--path file_path [-t|--test] [-s|--silent] [-h|--help]"
         echo 
         echo "Options:"
         echo "-p|--path     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup. "
         echo "-t|--test     Sets the test flag, which makes the script run without really performing the rsync backup."
+        echo "-s|--silent   Sets the 'silent' flag, which prevents the output of DEBUG and INFO level logs to stdout. It will only be logged to the log file. ERROR level will still be logged to stdout and file."
         echo "-h|--help     Print this Help."
         echo
         echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
@@ -69,7 +70,7 @@ checkTrackingFile() {
                 #       This checks if there is a file that has a modification date older than 24 hrs.
                 #       But I wanted to make the logic more obvious by using this if clause, for others to read.
                 #       In addition I wanted to react differently on a non existing file and on an existing file with a mtime diff of less than 24 hrs.
-                trackingFileDate=$(stat -c %Y $trackingFile)
+                trackingFileDate=$(stat -c %Y "$trackingFile")
                 currentTime=$(date +%s)
                 timeDiff=$((currentTime - trackingFileDate))
                 if ((timeDiff < 86400)); then
@@ -80,10 +81,10 @@ checkTrackingFile() {
                         # We consider this a successful execution of the script, assuming that it is being called regulary using e.g. a cronjob.
                         exit 0
                 else
-                        log "$logRegularExecFileName" "INFO" "trackingFile Date is bigger or equal than 86400 seconds (24hrs). Age is $timeDiff. Backup will be started now."
+                        log "$logRegularExecFileName" "INFO" "trackingFile Date is bigger or equal than 86400 seconds (24hrs). Age is $timeDiff. Backup will be started now. For a detailed backup log see: $logdir$logFileName"
                 fi
         else
-                log "$logRegularExecFileName" "INFO" "Tracking file $trackingFile not found. Assuming first or force run. Starting backup."
+                log "$logRegularExecFileName" "INFO" "Tracking file $trackingFile not found. Assuming first or force run. Starting backup. For a detailed backup log see: $logdir$logFileName"
         fi
 }
 
@@ -111,9 +112,6 @@ startBackup() {
         #       --stats  Shows a comprehensive report at the end of transferring the data.
         #       -v      Flag for verbose output
         #       -h      Flag for human readable output
-
-        # In a former version of this script, the rsync output has been piped to console as well as stdout usind tee: > > (tee -a $logdir/stdout.log) 2> >(tee -a $logdir/stderr.log >&2)
-        # This is not necessary in this version, as a dedicated logging function has been introduced.
         ((counter=0))
         for i in "${sourceDirectoryArray[@]}"; do
                 # Adding a blank line in notification to have it better formatted in output
@@ -127,14 +125,17 @@ startBackup() {
                 timestamp=$(date +%Y%m%d-%H%M%S)
                 logStdErrorFile="$timestamp-stderr.log"
                 touch "$logdir/$logStdErrorFile"
-                if [ "$testflag" != "true" ]; then
-                        # TODO: Add log entry
+                if [ "$testFlag" != "true" ]; then
+                        # logging to execution to make an entry that can be picked up by a monitoring sytem.
+                        # In addition this creates a more readable entry, as the backup log contains loads of details from the rsync.
+                        log "$logRegularExecFileName" "INFO" "Backing up $i to target device ${targetDirectoryArray[$counter]}."
                         # Running the rsync. Redirecting output of stdin and stdout to a file and tee by splitting the pipe.
                         rsync -avh --modify-window=1 --stats "$i" "${targetDirectoryArray[$counter]}" > >(tee -a "$logdir/$logFileName") 2> >(tee -a "$logdir/$logStdErrorFile" >&2)
                         # Getting the returncode of the first command in the pipe - the rsync.
                         out=${PIPESTATUS[0]}
                 else
                         # we assume a successful rsync command when using the -t testparam.
+                        log  "$logFileName" "INFO" "Testflag recognized. Skipped rsync execution."
                         out=0
                 fi
                 # uncomment following line for debugging purpose to test the if clause while using the -t param. change the value to 0 for testing the script success.
@@ -151,15 +152,16 @@ startBackup() {
                         log "$logFileName" "ERROR" "$notification"
                         exit 2
                 fi
+                ((++counter))
         done
         # Setting the new modification date on trackingFile
-        touch $trackingFile
+        touch "$trackingFile"
         log "$logFileName" "INFO" "FINAL FINISH $(date)"
         exit 0
 }
 
 ################################################################################
-# Function to check and validate input file content                            #
+# Function to get and validate input file content                              #
 ################################################################################
 getFileContent() {
         # Reading information from file
@@ -179,7 +181,12 @@ getFileContent() {
                         targetDirectoryArray[$counter]="${fieldsArray[1]}"
                         ((++counter))
         done <"$filepath"
+}
 
+################################################################################
+# Function to validate input file content                                      #
+################################################################################
+checkFileContent() {
         # Checking and validating input
         # Now checking if the source paths exist
         # We only check the source paths. Non existant target paths will be created later anyway.
@@ -204,7 +211,13 @@ log(){
         if [ "$type" = "ERROR" ]; then
                 printf "%s\n"  "$timestamp $type $message" 1>&2 > >(tee -a "$logdir/$targetFile" >&2)       
         else
-                printf "%s\n"  "$timestamp $type $message" | tee -a "$logdir/$targetFile"
+                if [ "$silentFlag" = true ]; then
+                        # If the -s silent parameter has been set, we only append the log to the log file.
+                        printf "%s\n"  "$timestamp $type $message" >> "$logdir/$targetFile"
+                else
+                        # If the -s silent paramater has not been set, the message gets added to the log file and appears as output in the shell
+                        printf "%s\n"  "$timestamp $type $message" | tee -a "$logdir/$targetFile"
+                fi
         fi
 
 }
@@ -215,8 +228,8 @@ log(){
 # Reading input parameters one by one, and parsing it.
 # In this while loop we only read the parameters, and validate input.
 # We only start the backup later, if 
-fileCheckFlag=false
-testflag=false
+testFlag=false
+silentFlag=false
 declare -a sourceDirectoryArray
 declare -a targetDirectoryArray
 # Preparing logging and log directories
@@ -250,35 +263,35 @@ if [ "$rc" != "0" ]; then
 fi
 
 # Starting to parse input parameters and performing input validation
+# Reading and parsing the arguments and setting flags to influence the script behaviour later.
 while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-        # TODO: Maybe add a force parameter, which forces the script to continue even if a single backup job failed.
         -h | --help)
                 showHelp
                 exit 0
                 ;;
         -p | --path) # specifies input file path
                 filepath="$2"
-                # For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
-                # This is being done here, to have the entry in the log file before the first real log entry, and we do not want it to show up when we just need to pass the -h/help usage information.
-                log "$logRegularExecFileName" "DEBUG" "#####################################################################"
-                log "$logFileName" "DEBUG" "#####################################################################"
+
                 # First we check if the file exists
                 if [[ -f "$filepath" ]]; then
-                        log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath "
-                        # Then we get the content and validate the content if it is properly formatted
+                        # If the file exists, we read its contents.
                         getFileContent
                 else
                         log "$logRegularExecFileName" "ERROR" "The filepath '$filepath' specified with the -p|--path parameter does not exist."
                         exit 1
                 fi
-                fileCheckFlag=true
                 shift # past argument
                 shift # past value
                 ;;
-        -t | --test) # specifies the testflag
-                testflag=true
+        -t | --test) # specifies the testFlag
+                testFlag=true
+                shift # past argument
+                ;;
+        -s | --silent) # We handled this before. 
+                silentFlag=true
+                log "$logRegularExecFileName" "INFO" "Silent flag has been set. INFO and DEBUG Level output will not go to stdout but logfile only."
                 shift # past argument
                 ;;
         *) # unknown option
@@ -289,13 +302,18 @@ while [[ $# -gt 0 ]]; do
         esac
 done
 
-# Of course we only start the backup if the proper flag is present,
-# proving that the proper parameter has been set, and the input has been validated.
-# In addition this allows the while loop to finish and properly parse all input parameters, before we take action.
-if [ "$fileCheckFlag" = true ]; then
-        # Performing check if there has been a backup in the last 24 hrs.
-        # The check will exit with rc 0 if there has been a check, so the backup is not started.
-        checkTrackingFile
-        # If the last backup is more than 24 hrs ago, we start the backup.
-        startBackup
-fi
+# For having a better visualization in the log file, we just add a couple of # characters to visually separate the different runs of this script in the log
+# This is being done here, to have the entry in the log file before the first real log entry, and we do not want it to show up when we just need to pass the -h/help usage information.
+log "$logRegularExecFileName" "DEBUG" "#####################################################################"
+log "$logFileName" "DEBUG" "#####################################################################"
+# We validated the filepath before in the argument parsing. For the -s parameter to have effect, we write this log outside of the argument parsing function.
+log "$logRegularExecFileName" "INFO" "Input filepath validated: $filepath and successfully extracted data."
+# Now we validate the content and checking for the existance of the source folders
+checkFileContent
+# All checks and validations are done now, proving that the proper parameters have been set, and the input has been validated.
+# Performing check if there has been a backup in the last 24 hrs.
+# The check will exit with rc 0 if there has been a check, so the backup is not started.
+checkTrackingFile
+# If the last backup is more than 24 hrs ago, we start the backup.
+startBackup
+
