@@ -41,16 +41,18 @@ Options:
 -p|--path     Mandatory parameter. Specifies the path of the config file which contains the source and target folders for the backup.
 -t|--test     Sets the test flag, which makes the script run without really performing the rsync backup.
 -h|--help     Print this Help.
+-s|--silent   Sets the 'silent' flag, which prevents the output of DEBUG and INFO level logs to stdout. It will only be logged to the log file. ERROR level will still be logged to stdout and file."
 
 Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt
-Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t
+Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -s
+Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t 
 
 The input file must contain a pair of source directory and target directory in each line, separated by a blank.
 The required format is: '<sourceDir> <targetDir>'
 
 Example input file:
-/mnt/d/doBackupSource/subdir1/ /mnt/f/doBackupTarget/
-/mnt/d/doBackupSource/subdir2/ /mnt/f/doBackupTarget/foodir/
+/mnt/d/doBackupSource/subdir1 /mnt/f/doBackupTarget/
+/mnt/d/doBackupSource/subdir2 /mnt/f/doBackupTarget/foodir/
 
 Exit codes:
 0         if execution successful.

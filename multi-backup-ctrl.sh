@@ -39,14 +39,15 @@ showHelp() {
         echo "-h|--help     Print this Help."
         echo
         echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt"
+        echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -s"
         echo "Example usage: ./multi-backup-ctrl.sh -p /tmp/myInputFile.txt -t"
         echo 
         echo "The input file must contain a pair of source directory and target directory in each line, separated by a blank."
         echo "The required format is '<sourceDir> <targetDir>'"
         echo
         echo "Example input file:"
-        echo "/mnt/d/doBackupSource/subdir1/ /mnt/f/doBackupTarget/"
-        echo "/mnt/d/doBackupSource/subdir2/ /mnt/f/doBackupTarget/foodir/"
+        echo "/mnt/d/doBackupSource/subdir1 /mnt/f/doBackupTarget/"
+        echo "/mnt/d/doBackupSource/subdir2 /mnt/f/doBackupTarget/foodir/"
         echo
         echo "Exit codes:"
         echo "0         if execution successful."
