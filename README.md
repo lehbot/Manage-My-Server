@@ -6,6 +6,8 @@ The Manage-My-Server project contains a collection of scripts for more convenien
 
 [Link to the OK-API Documentation Project](!../../../../../Documentation)
 
+[Link to the specific Manage-My-Server Project Documentation](!../../../../../Documentation/content/Manage-My-Server/about-manage-my-server.md)
+
 ## multi-backup-ctrl.sh
 This script is built to control a sync of multiple source directories to multiple target directories. The correlation, which source directory shall be synced to which target directory, is provided using an input file. The script is built to keep track of when the last sync job was executed, to make sure there are at least 24 hrs between the last sync and the actual one.
 ### Setup
